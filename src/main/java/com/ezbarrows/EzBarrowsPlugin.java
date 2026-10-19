@@ -43,8 +43,8 @@ import java.util.stream.Collectors;
 
 @PluginDescriptor(
         name = "EzBarrows",
-        description = "Barrows prayer icons on each sarcophagus and the shortest tunnel route to the chest",
-        tags = {"barrows", "prayer", "pvm", "crypt", "tunnel", "path"}
+        description = "Barrows helper: prayer icons on sarcophagi, brother names on mounds, a reward potential tracker and the tunnel route to the chest",
+        tags = {"barrows", "prayer", "pvm", "crypt", "tunnel", "path", "mound", "brothers", "reward", "potential", "chest"}
 )
 public class EzBarrowsPlugin extends Plugin {
     private static final Set<Integer> CHEST_IDS = ImmutableSet.of(
