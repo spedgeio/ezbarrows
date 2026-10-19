@@ -11,7 +11,6 @@ import net.runelite.api.GameState;
 import net.runelite.api.ObjectComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Point;
-import net.runelite.api.Prayer;
 import net.runelite.api.TileObject;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
@@ -30,7 +29,6 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 import javax.inject.Inject;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,9 +66,6 @@ public class EzBarrowsPlugin extends Plugin {
 
     @Getter(AccessLevel.PACKAGE)
     private List<Point> path = Collections.emptyList();
-
-    @Getter(AccessLevel.PACKAGE)
-    private Set<Prayer> activePrayers = Collections.emptySet();
 
     private final Set<TileObject> doors = new HashSet<>();
     // Door locks are fixed per run, so remember unlocked doors even while they're mid-open
@@ -134,8 +129,6 @@ public class EzBarrowsPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick event) {
-        activePrayers = findActivePrayers();
-
         Player player = client.getLocalPlayer();
         WorldView worldView = client.getTopLevelWorldView();
         CollisionData[] collisionMaps = worldView.getCollisionMaps();
@@ -149,17 +142,6 @@ public class EzBarrowsPlugin extends Plugin {
         Point start = toScenePoint(player.getLocalLocation());
         reachableSarcophagi = findReachableSarcophagi(flags, start, worldView.getPlane());
         path = config.showPath() ? findPathToChest(flags, start) : Collections.emptyList();
-    }
-
-    // Server values only change on the tick, so prayer flicking doesn't flash the outline
-    private Set<Prayer> findActivePrayers() {
-        Set<Prayer> active = EnumSet.noneOf(Prayer.class);
-        for (BarrowsBrother brother : BarrowsBrother.values()) {
-            if (client.getServerVarbitValue(brother.getPrayer().getVarbit()) == 1) {
-                active.add(brother.getPrayer());
-            }
-        }
-        return active;
     }
 
     // Each crypt is walled off, so only the coffin in the player's own crypt is reachable
@@ -204,7 +186,6 @@ public class EzBarrowsPlugin extends Plugin {
     private void reset() {
         sarcophagi.clear();
         reachableSarcophagi = Collections.emptyMap();
-        activePrayers = Collections.emptySet();
         doors.clear();
         unlockedDoorTiles.clear();
         chest = null;
