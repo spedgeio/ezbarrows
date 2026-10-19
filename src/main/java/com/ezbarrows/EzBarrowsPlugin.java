@@ -80,13 +80,13 @@ public class EzBarrowsPlugin extends Plugin {
     @Getter(AccessLevel.PACKAGE)
     private List<Point> path = Collections.emptyList();
 
-    // Kept across scene loads, as it's only known once found and lasts until the chest is looted
+    // Kept across scene loads until the chest is looted
     @Getter(AccessLevel.PACKAGE)
     private BarrowsBrother tunnelBrother;
     private int lastKilledCount;
 
     private final Set<TileObject> doors = new HashSet<>();
-    // Door locks are fixed per run, so remember unlocked doors even while they're mid-open
+    // Remembered so doors still count as unlocked while opening
     private final Set<Point> unlockedDoorTiles = new HashSet<>();
     private GameObject chest;
 
@@ -185,7 +185,7 @@ public class EzBarrowsPlugin extends Plugin {
         }
         lastKilledCount = killedCount;
 
-        // Searching the tunnel brother's sarcophagus shows the hidden tunnel prompt in his crypt
+        // The hidden tunnel prompt only appears in the tunnel brother's crypt
         Widget dialogue = client.getWidget(InterfaceID.Objectbox.TEXT);
         if (dialogue != null && !dialogue.isHidden() && dialogue.getText() != null
                 && dialogue.getText().contains(HIDDEN_TUNNEL_TEXT) && reachableSarcophagi.size() == 1) {
@@ -204,12 +204,12 @@ public class EzBarrowsPlugin extends Plugin {
         return alive.size() == 1 ? alive.get(0) : null;
     }
 
-    // Each crypt is walled off, so only the coffin in the player's own crypt is reachable
+    // Crypts are walled off, so only the player's own coffin is reachable
     private Map<GameObject, BarrowsBrother> findReachableSarcophagi(int[][] flags, Point start, int plane) {
         TunnelPathfinder pathfinder = new TunnelPathfinder(flags, Collections.emptySet());
         Map<GameObject, BarrowsBrother> reachable = new HashMap<>();
         sarcophagi.forEach((object, brother) -> {
-            // Collision maps are per floor, so coffins on other floors can't be checked
+            // Collision maps only cover the current floor
             if (object.getPlane() == plane && !pathfinder.findPath(start,
                     tile -> isNextTo(tile, object.getSceneMinLocation(), object.getSceneMaxLocation())).isEmpty()) {
                 reachable.put(object, brother);
@@ -252,7 +252,7 @@ public class EzBarrowsPlugin extends Plugin {
         path = Collections.emptyList();
     }
 
-    // Tunnel door IDs are one contiguous range covering every door and state
+    // Every tunnel door and state falls in this ID range
     static boolean isDoor(int objectId) {
         return objectId >= ObjectID.BARROWS_DOOR_INACTIVE_R && objectId <= ObjectID.BARROWS_DOOR_P_L;
     }

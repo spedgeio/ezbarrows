@@ -64,10 +64,10 @@ public class EzBarrowsPotentialOverlay extends OverlayPanel {
         if (!alive.isEmpty()) {
             addLine("Brothers", alive.stream().map(BarrowsBrother::getDisplayName).collect(Collectors.joining(", ")), Color.YELLOW);
         }
-        // Brothers are always worth killing, so only tunnel monsters are fitted under the cap
+        // Remaining brothers are always counted; only tunnel monsters are fitted under the cap
         int brothersLeft = alive.stream().mapToInt(BarrowsBrother::getRewardPoints).sum();
         int room = cap - points - brothersLeft;
-        // The search is too slow to repeat every frame, so only redo it when the room left changes
+        // Only search again when the room left changes
         if (room != cachedRoom) {
             cachedRoom = room;
             cachedKills = RewardPotential.killsToCap(room);

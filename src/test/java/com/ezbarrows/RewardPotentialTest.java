@@ -20,7 +20,7 @@ public class RewardPotentialTest
 	}
 
 	@Test
-	public void eightHundredAndEightyIsTheWikiPercentage()
+	public void eightHundredAndEightyPointsIs86Point95Percent()
 	{
 		assertEquals(86.95, RewardPotential.percent(880), 0.0001);
 	}

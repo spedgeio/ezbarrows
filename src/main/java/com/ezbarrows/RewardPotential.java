@@ -26,12 +26,12 @@ class RewardPotential {
         private final int points;
     }
 
-    // Matches the game's own sum: every kill's combat level, plus 2 per brother
+    // Combat levels of everything killed, plus 2 per brother
     static int currentPoints(int killedMonsterCombat, int brothersKilled) {
         return killedMonsterCombat + brothersKilled * 2;
     }
 
-    // Cut to 2 decimal places, as the game shows 880 points as 86.95% rather than 86.96%
+    // Truncated, not rounded, to 2 decimal places
     static double percent(int points) {
         return Math.floor(points * 10000.0 / MAX_POINTS) / 100;
     }
