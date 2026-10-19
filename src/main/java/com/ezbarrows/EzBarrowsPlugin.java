@@ -20,7 +20,10 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.WallObjectDespawned;
 import net.runelite.api.events.WallObjectSpawned;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.ObjectID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -28,12 +31,15 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import javax.inject.Inject;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 @PluginDescriptor(
         name = "EzBarrows",
@@ -43,6 +49,7 @@ import java.util.Set;
 public class EzBarrowsPlugin extends Plugin {
     private static final Set<Integer> CHEST_IDS = ImmutableSet.of(
             ObjectID.BARROWS_STONE_CHEST, ObjectID.BARROWS_STONE_CHEST_CLOSED, ObjectID.BARROWS_STONE_CHEST_OPEN);
+    private static final String HIDDEN_TUNNEL_TEXT = "You've found a hidden tunnel";
 
     @Inject
     private Client client;
@@ -59,6 +66,12 @@ public class EzBarrowsPlugin extends Plugin {
     @Inject
     private EzBarrowsPathOverlay pathOverlay;
 
+    @Inject
+    private EzBarrowsMoundOverlay moundOverlay;
+
+    @Inject
+    private EzBarrowsPotentialOverlay potentialOverlay;
+
     private final Map<GameObject, BarrowsBrother> sarcophagi = new HashMap<>();
 
     @Getter(AccessLevel.PACKAGE)
@@ -66,6 +79,11 @@ public class EzBarrowsPlugin extends Plugin {
 
     @Getter(AccessLevel.PACKAGE)
     private List<Point> path = Collections.emptyList();
+
+    // Kept across scene loads, as it's only known once found and lasts until the chest is looted
+    @Getter(AccessLevel.PACKAGE)
+    private BarrowsBrother tunnelBrother;
+    private int lastKilledCount;
 
     private final Set<TileObject> doors = new HashSet<>();
     // Door locks are fixed per run, so remember unlocked doors even while they're mid-open
@@ -76,13 +94,18 @@ public class EzBarrowsPlugin extends Plugin {
     protected void startUp() {
         overlayManager.add(overlay);
         overlayManager.add(pathOverlay);
+        overlayManager.add(moundOverlay);
+        overlayManager.add(potentialOverlay);
     }
 
     @Override
     protected void shutDown() {
         overlayManager.remove(overlay);
         overlayManager.remove(pathOverlay);
+        overlayManager.remove(moundOverlay);
+        overlayManager.remove(potentialOverlay);
         reset();
+        tunnelBrother = null;
     }
 
     @Subscribe
@@ -128,6 +151,14 @@ public class EzBarrowsPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event) {
+        // Looting the chest ends the run
+        if (event.getGroupId() == InterfaceID.BARROWS_REWARD) {
+            tunnelBrother = null;
+        }
+    }
+
+    @Subscribe
     public void onGameTick(GameTick event) {
         Player player = client.getLocalPlayer();
         WorldView worldView = client.getTopLevelWorldView();
@@ -142,6 +173,35 @@ public class EzBarrowsPlugin extends Plugin {
         Point start = toScenePoint(player.getLocalLocation());
         reachableSarcophagi = findReachableSarcophagi(flags, start, worldView.getPlane());
         path = config.showPath() ? findPathToChest(flags, start) : Collections.emptyList();
+        updateTunnelBrother();
+    }
+
+    private void updateTunnelBrother() {
+        Predicate<BarrowsBrother> isKilled = brother -> client.getVarbitValue(brother.getKilledVarbit()) != 0;
+        int killedCount = (int) Arrays.stream(BarrowsBrother.values()).filter(isKilled).count();
+        // Kills only drop back to zero when a new run starts
+        if (killedCount == 0 && lastKilledCount > 0) {
+            tunnelBrother = null;
+        }
+        lastKilledCount = killedCount;
+
+        // Searching the tunnel brother's sarcophagus shows the hidden tunnel prompt in his crypt
+        Widget dialogue = client.getWidget(InterfaceID.Objectbox.TEXT);
+        if (dialogue != null && !dialogue.isHidden() && dialogue.getText() != null
+                && dialogue.getText().contains(HIDDEN_TUNNEL_TEXT) && reachableSarcophagi.size() == 1) {
+            tunnelBrother = reachableSarcophagi.values().iterator().next();
+        }
+        if (tunnelBrother == null) {
+            tunnelBrother = onlyBrotherAlive(isKilled);
+        }
+    }
+
+    // With five brothers killed, the one left must be in the tunnel
+    static BarrowsBrother onlyBrotherAlive(Predicate<BarrowsBrother> isKilled) {
+        List<BarrowsBrother> alive = Arrays.stream(BarrowsBrother.values())
+                .filter(isKilled.negate())
+                .collect(Collectors.toList());
+        return alive.size() == 1 ? alive.get(0) : null;
     }
 
     // Each crypt is walled off, so only the coffin in the player's own crypt is reachable
