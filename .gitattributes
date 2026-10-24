@@ -1,3 +1,4 @@
+* text=auto eol=lf
 # Unix start script must keep LF to run on Linux and macOS
 /gradlew text eol=lf
 # Windows scripts use CRLF
