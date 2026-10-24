@@ -61,10 +61,6 @@ public class EzBarrowsPotentialOverlay extends OverlayPanel
 			return super.render(graphics);
 		}
 
-		if (!alive.isEmpty())
-		{
-			addLine("Brothers", alive.stream().map(BarrowsBrother::getDisplayName).collect(Collectors.joining(", ")), Color.YELLOW);
-		}
 		// Remaining brothers are always counted; only tunnel monsters are fitted under the cap
 		int brothersLeft = alive.stream().mapToInt(BarrowsBrother::getRewardPoints).sum();
 		int room = cap - points - brothersLeft;
