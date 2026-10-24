@@ -9,11 +9,13 @@ import static org.junit.Assert.assertEquals;
 public class EzBarrowsOverlayTest
 {
 	@Test
-	public void iconIsScaledToEightyPercent()
+	public void everyBrotherHasAPortrait()
 	{
-		BufferedImage icon = EzBarrowsOverlay.scaledIcon(new BufferedImage(25, 25, BufferedImage.TYPE_INT_ARGB));
+		for (BarrowsBrother brother : BarrowsBrother.values())
+		{
+			BufferedImage portrait = EzBarrowsOverlay.loadPortrait(brother);
 
-		assertEquals(20, icon.getWidth());
-		assertEquals(20, icon.getHeight());
+			assertEquals(brother.getDisplayName(), 52, portrait.getHeight());
+		}
 	}
 }

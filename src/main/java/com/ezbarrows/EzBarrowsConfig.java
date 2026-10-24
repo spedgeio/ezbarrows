@@ -13,7 +13,7 @@ public interface EzBarrowsConfig extends Config
 	@ConfigItem(
 		keyName = "hideKilled",
 		name = "Hide Killed Brothers",
-		description = "Hide the icon once that brother has been killed this run.",
+		description = "Hide the portrait once that brother has been killed this run.",
 		position = 1
 	)
 	default boolean hideKilled()
