@@ -5,7 +5,9 @@ import org.junit.Test;
 import java.awt.Color;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class EzBarrowsMoundOverlayTest
 {
@@ -38,5 +40,13 @@ public class EzBarrowsMoundOverlayTest
 	public void tunnelIsUnknownWithSeveralAlive()
 	{
 		assertNull(EzBarrowsPlugin.onlyBrotherAlive(brother -> brother == BarrowsBrother.AHRIM));
+	}
+
+	@Test
+	public void hiddenTunnelPromptIsRecognisedEvenWhenWrapped()
+	{
+		assertTrue(EzBarrowsPlugin.mentionsHiddenTunnel("You've found a hidden tunnel, do you want to enter it?"));
+		assertTrue(EzBarrowsPlugin.mentionsHiddenTunnel("You've found a hidden<br>tunnel, do you want to enter it?"));
+		assertFalse(EzBarrowsPlugin.mentionsHiddenTunnel("Yeah I'm fearless!"));
 	}
 }

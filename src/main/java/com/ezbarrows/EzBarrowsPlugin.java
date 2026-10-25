@@ -1,5 +1,6 @@
 package com.ezbarrows;
 
+import com.ezbarrows.RewardPotential.TunnelMonster;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Provides;
 import lombok.AccessLevel;
@@ -23,6 +24,7 @@ import net.runelite.api.events.WallObjectSpawned;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.ObjectID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -50,7 +52,7 @@ public class EzBarrowsPlugin extends Plugin
 {
 	private static final Set<Integer> CHEST_IDS = ImmutableSet.of(
 		ObjectID.BARROWS_STONE_CHEST, ObjectID.BARROWS_STONE_CHEST_CLOSED, ObjectID.BARROWS_STONE_CHEST_OPEN);
-	private static final String HIDDEN_TUNNEL_TEXT = "You've found a hidden tunnel";
+	private static final String HIDDEN_TUNNEL_TEXT = "hidden tunnel";
 	static final int SURFACE_REGION_ID = 14131;
 	// Crypts and tunnels
 	static final int UNDERGROUND_REGION_ID = 14231;
@@ -76,6 +78,9 @@ public class EzBarrowsPlugin extends Plugin
 	@Inject
 	private EzBarrowsPotentialOverlay potentialOverlay;
 
+	@Inject
+	private EzBarrowsHighlightOverlay highlightOverlay;
+
 	private final Map<GameObject, BarrowsBrother> sarcophagi = new HashMap<>();
 
 	@Getter(AccessLevel.PACKAGE)
@@ -92,7 +97,15 @@ public class EzBarrowsPlugin extends Plugin
 	private final Set<TileObject> doors = new HashSet<>();
 	// Remembered so doors still count as unlocked while opening
 	private final Set<Point> unlockedDoorTiles = new HashSet<>();
+	@Getter(AccessLevel.PACKAGE)
 	private GameObject chest;
+
+	// Tunnel monsters still to kill to get closest to the cap
+	@Getter(AccessLevel.PACKAGE)
+	private Map<TunnelMonster, Integer> suggestedKills = Collections.emptyMap();
+	@Getter(AccessLevel.PACKAGE)
+	private boolean readyToLoot;
+	private int suggestedRoom = Integer.MIN_VALUE;
 
 	@Override
 	protected void startUp()
@@ -101,6 +114,7 @@ public class EzBarrowsPlugin extends Plugin
 		overlayManager.add(pathOverlay);
 		overlayManager.add(moundOverlay);
 		overlayManager.add(potentialOverlay);
+		overlayManager.add(highlightOverlay);
 	}
 
 	@Override
@@ -110,6 +124,7 @@ public class EzBarrowsPlugin extends Plugin
 		overlayManager.remove(pathOverlay);
 		overlayManager.remove(moundOverlay);
 		overlayManager.remove(potentialOverlay);
+		overlayManager.remove(highlightOverlay);
 		reset();
 		tunnelBrother = null;
 	}
@@ -189,14 +204,47 @@ public class EzBarrowsPlugin extends Plugin
 		{
 			reachableSarcophagi = Collections.emptyMap();
 			path = Collections.emptyList();
+			clearRewardPlan();
 			return;
 		}
 
 		int[][] flags = collisionMaps[worldView.getPlane()].getFlags();
 		Point start = toScenePoint(player.getLocalLocation());
 		reachableSarcophagi = findReachableSarcophagi(flags, start, worldView.getPlane());
-		path = config.showPath() ? findPathToChest(flags, start) : Collections.emptyList();
+		path = config.showPath() ? findPathToChest(flags, start, worldView.getPlane()) : Collections.emptyList();
 		updateTunnelBrother();
+		updateRewardPlan();
+	}
+
+	private void updateRewardPlan()
+	{
+		List<BarrowsBrother> alive = Arrays.stream(BarrowsBrother.values())
+			.filter(brother -> client.getVarbitValue(brother.getKilledVarbit()) == 0)
+			.collect(Collectors.toList());
+		int points = RewardPotential.currentPoints(client.getVarbitValue(VarbitID.BARROWS_KILLED_MONSTER),
+			BarrowsBrother.values().length - alive.size());
+		// Remaining brothers are always counted; only tunnel monsters are fitted under the cap
+		int room = config.pointsCap() - points - alive.stream().mapToInt(BarrowsBrother::getRewardPoints).sum();
+		// Only search again when the room left changes
+		if (room != suggestedRoom)
+		{
+			suggestedRoom = room;
+			suggestedKills = RewardPotential.killsToCap(room);
+		}
+		readyToLoot = isReadyToLoot(alive.size(), suggestedKills);
+	}
+
+	// Nothing left that would get closer to the cap
+	static boolean isReadyToLoot(int brothersAlive, Map<TunnelMonster, Integer> suggestedKills)
+	{
+		return brothersAlive == 0 && suggestedKills.isEmpty();
+	}
+
+	private void clearRewardPlan()
+	{
+		suggestedKills = Collections.emptyMap();
+		suggestedRoom = Integer.MIN_VALUE;
+		readyToLoot = false;
 	}
 
 	private void updateTunnelBrother()
@@ -211,9 +259,7 @@ public class EzBarrowsPlugin extends Plugin
 		lastKilledCount = killedCount;
 
 		// The hidden tunnel prompt only appears in the tunnel brother's crypt
-		Widget dialogue = client.getWidget(InterfaceID.Objectbox.TEXT);
-		if (dialogue != null && !dialogue.isHidden() && dialogue.getText() != null
-			&& dialogue.getText().contains(HIDDEN_TUNNEL_TEXT) && reachableSarcophagi.size() == 1)
+		if (isHiddenTunnelPromptOpen() && reachableSarcophagi.size() == 1)
 		{
 			tunnelBrother = reachableSarcophagi.values().iterator().next();
 		}
@@ -221,6 +267,34 @@ public class EzBarrowsPlugin extends Plugin
 		{
 			tunnelBrother = onlyBrotherAlive(isKilled);
 		}
+	}
+
+	private boolean isHiddenTunnelPromptOpen()
+	{
+		if (mentionsHiddenTunnel(client.getWidget(InterfaceID.Objectbox.TEXT))
+			|| mentionsHiddenTunnel(client.getWidget(InterfaceID.Messagebox.TEXT)))
+		{
+			return true;
+		}
+		// Yes/no menus put the question in the first option line
+		Widget options = client.getWidget(InterfaceID.Chatmenu.OPTIONS);
+		if (options == null || options.isHidden() || options.getDynamicChildren() == null)
+		{
+			return false;
+		}
+		return Arrays.stream(options.getDynamicChildren()).anyMatch(EzBarrowsPlugin::mentionsHiddenTunnel);
+	}
+
+	private static boolean mentionsHiddenTunnel(Widget widget)
+	{
+		return widget != null && !widget.isHidden() && widget.getText() != null
+			&& mentionsHiddenTunnel(widget.getText());
+	}
+
+	// Long dialogue text can be wrapped with <br> between any two words
+	static boolean mentionsHiddenTunnel(String text)
+	{
+		return text.replace("<br>", " ").toLowerCase().contains(HIDDEN_TUNNEL_TEXT);
 	}
 
 	// With five brothers killed, the one left must be in the tunnel
@@ -249,9 +323,10 @@ public class EzBarrowsPlugin extends Plugin
 		return reachable;
 	}
 
-	private List<Point> findPathToChest(int[][] flags, Point start)
+	private List<Point> findPathToChest(int[][] flags, Point start, int plane)
 	{
-		if (chest == null || doors.isEmpty())
+		// Crypts are on a different floor from the tunnels, so their collision maps don't lead to the chest
+		if (chest == null || doors.isEmpty() || chest.getPlane() != plane)
 		{
 			return Collections.emptyList();
 		}
@@ -286,6 +361,7 @@ public class EzBarrowsPlugin extends Plugin
 		unlockedDoorTiles.clear();
 		chest = null;
 		path = Collections.emptyList();
+		clearRewardPlan();
 	}
 
 	static boolean isAtBarrows(Player player)

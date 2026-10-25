@@ -26,6 +26,19 @@ class RewardPotential
 
 		private final String displayName;
 		private final int points;
+
+		// Matches on combat level too, as the tunnel monsters are worth exactly their level
+		static TunnelMonster fromNpc(String name, int combatLevel)
+		{
+			for (TunnelMonster monster : values())
+			{
+				if (monster.displayName.equalsIgnoreCase(name) && monster.points == combatLevel)
+				{
+					return monster;
+				}
+			}
+			return null;
+		}
 	}
 
 	// Combat levels of everything killed, plus 2 per brother
