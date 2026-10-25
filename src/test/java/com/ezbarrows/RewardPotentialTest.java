@@ -4,9 +4,12 @@ import com.ezbarrows.RewardPotential.TunnelMonster;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class RewardPotentialTest
@@ -93,5 +96,28 @@ public class RewardPotentialTest
 	{
 		assertTrue(RewardPotential.killsToCap(0).isEmpty());
 		assertTrue(RewardPotential.killsToCap(-10).isEmpty());
+	}
+
+	@Test
+	public void tunnelMonstersMatchOnNameAndLevel()
+	{
+		assertEquals(TunnelMonster.BLOODWORM, TunnelMonster.fromNpc("Bloodworm", 52));
+		assertEquals(TunnelMonster.GIANT_CRYPT_RAT, TunnelMonster.fromNpc("Giant crypt rat", 76));
+	}
+
+	@Test
+	public void monstersOutsideTheTunnelsDoNotMatch()
+	{
+		assertNull(TunnelMonster.fromNpc("Skeleton", 22));
+		assertNull(TunnelMonster.fromNpc("Ahrim the Blighted", 98));
+		assertNull(TunnelMonster.fromNpc(null, 52));
+	}
+
+	@Test
+	public void readyToLootOnceBrothersAreDeadAndNothingElseFits()
+	{
+		assertTrue(EzBarrowsPlugin.isReadyToLoot(0, Collections.emptyMap()));
+		assertFalse(EzBarrowsPlugin.isReadyToLoot(1, Collections.emptyMap()));
+		assertFalse(EzBarrowsPlugin.isReadyToLoot(0, Map.of(TunnelMonster.BLOODWORM, 1)));
 	}
 }

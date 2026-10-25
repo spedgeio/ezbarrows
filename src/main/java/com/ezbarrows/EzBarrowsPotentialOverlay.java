@@ -13,7 +13,6 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,15 +20,15 @@ import java.util.stream.Collectors;
 public class EzBarrowsPotentialOverlay extends OverlayPanel
 {
 	private final Client client;
+	private final EzBarrowsPlugin plugin;
 	private final EzBarrowsConfig config;
-	private int cachedRoom = Integer.MIN_VALUE;
-	private Map<RewardPotential.TunnelMonster, Integer> cachedKills = Collections.emptyMap();
 
 	@Inject
 	EzBarrowsPotentialOverlay(Client client, EzBarrowsPlugin plugin, EzBarrowsConfig config)
 	{
 		super(plugin);
 		this.client = client;
+		this.plugin = plugin;
 		this.config = config;
 		setPosition(OverlayPosition.TOP_LEFT);
 	}
@@ -61,24 +60,17 @@ public class EzBarrowsPotentialOverlay extends OverlayPanel
 			return super.render(graphics);
 		}
 
-		// Remaining brothers are always counted; only tunnel monsters are fitted under the cap
-		int brothersLeft = alive.stream().mapToInt(BarrowsBrother::getRewardPoints).sum();
-		int room = cap - points - brothersLeft;
-		// Only search again when the room left changes
-		if (room != cachedRoom)
-		{
-			cachedRoom = room;
-			cachedKills = RewardPotential.killsToCap(room);
-		}
-		for (Map.Entry<RewardPotential.TunnelMonster, Integer> kill : cachedKills.entrySet())
+		Map<RewardPotential.TunnelMonster, Integer> kills = plugin.getSuggestedKills();
+		for (Map.Entry<RewardPotential.TunnelMonster, Integer> kill : kills.entrySet())
 		{
 			addLine(kill.getKey().getDisplayName(), "x" + kill.getValue(), Color.YELLOW);
 		}
-		if (cachedKills.isEmpty())
+		if (kills.isEmpty())
 		{
 			addLine("Monsters", "stop here", Color.GREEN);
 		}
-		int projected = points + brothersLeft + RewardPotential.total(cachedKills);
+		int brothersLeft = alive.stream().mapToInt(BarrowsBrother::getRewardPoints).sum();
+		int projected = points + brothersLeft + RewardPotential.total(kills);
 		addLine("Projected", formatPoints(projected), projected > cap ? Color.RED : Color.WHITE);
 		return super.render(graphics);
 	}
